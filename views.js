@@ -292,6 +292,10 @@ function renderProgrammesView(container) {
     const showTopics = p.kind === "advising" || p.kind === "writing";
     const showBudget = p.kind === "staffed" || p.kind === "additionalSupport";
     const groupByFaculty = showBudget;
+    /* Core Curriculum has no "reach" or Green/Yellow/Orange/Red data at all — it's module-based
+       (SCOR511/SCOR612) — so it gets its own tiles, module pass-rate/attendance charts and table
+       instead of the generic reach/at-risk view, which would otherwise show misleading zeros. */
+    const isCoreCurriculum = p.kind === "coreCurriculum";
 
     container.innerHTML = `
       <div class="card">
@@ -329,9 +333,18 @@ function renderProgrammesView(container) {
 
     const tiles = container.querySelector("#pdTiles");
     tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Submissions", value: agg.count }));
-    tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Students reached", value: fmtNum(agg.reachTotal) }));
-    tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "At-risk assisted", value: fmtNum(agg.riskAssisted) + " / " + fmtNum(agg.riskTotal) }));
-    tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Reporting compliance", value: agg.compliance.pct != null ? fmtPct(agg.compliance.pct) : "—", status: (agg.compliance.pct || 0) >= 80 ? "good" : "warning" }));
+    if (isCoreCurriculum) {
+      const avgPass = avg(subs.map(s => s.form.passRate));
+      const avgAttendance = avg(subs.map(s => s.form.attendance));
+      const atRiskInModules = sum(subs.map(s => s.form.atRiskInModule));
+      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Avg pass rate", value: avgPass != null ? fmtPct(avgPass) : "—" }));
+      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Avg attendance", value: avgAttendance != null ? fmtPct(avgAttendance) : "—" }));
+      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Students at risk in modules", value: fmtNum(atRiskInModules) }));
+    } else {
+      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Students reached", value: fmtNum(agg.reachTotal) }));
+      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "At-risk assisted", value: fmtNum(agg.riskAssisted) + " / " + fmtNum(agg.riskTotal) }));
+      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Reporting compliance", value: agg.compliance.pct != null ? fmtPct(agg.compliance.pct) : "—", status: (agg.compliance.pct || 0) >= 80 ? "good" : "warning" }));
+    }
 
     if (showBudget) {
       const bt = container.querySelector("#pdBudgetTiles");
@@ -362,32 +375,57 @@ function renderProgrammesView(container) {
       }
     }
 
-    container.querySelector("#pdRiskChart").innerHTML = "";
-    riskChartFromAgg(container.querySelector("#pdRiskChart"), agg, "At-Risk Breakdown");
-
-    let compareTitle, compareCats, compareVals;
-    if (groupByFaculty) {
-      const allFaculties = [...new Set(Object.values(p.practitioners).flat())];
-      const byFac = allFaculties.map(fac => ({ label: FACULTY_LABELS[fac] || fac, a: computeAggregate(filterSubs(subs, { faculty: fac })) }));
-      compareTitle = "Reach by Faculty";
-      compareCats = byFac.map(x => x.label);
-      compareVals = byFac.map(x => x.a.reachTotal);
+    if (isCoreCurriculum) {
+      const byModule = CORE_CURRICULUM_MODULES.map(m => ({ label: m, subs: subs.filter(s => s.form.module === m) }));
+      container.querySelector("#pdRiskChart").innerHTML = "";
+      renderBarChart(container.querySelector("#pdRiskChart"), {
+        title: "Pass Rate by Module", sub: `${state.term} ${state.year}`,
+        categories: byModule.map(x => x.label),
+        series: [{ label: "Pass rate %", color: p.color, values: byModule.map(x => avg(x.subs.map(s => s.form.passRate)) || 0) }],
+        valueSuffix: "%"
+      });
+      container.querySelector("#pdCompareChart").innerHTML = "";
+      renderBarChart(container.querySelector("#pdCompareChart"), {
+        title: "Attendance by Module", sub: `${state.term} ${state.year}`,
+        categories: byModule.map(x => x.label),
+        series: [{ label: "Attendance %", color: "var(--cat-aqua)", values: byModule.map(x => avg(x.subs.map(s => s.form.attendance)) || 0) }],
+        valueSuffix: "%"
+      });
     } else {
-      const byPractitioner = Object.keys(p.practitioners).map(name => ({ label: name, a: computeAggregate(filterSubs(subs, { practitioner: name })) }));
-      compareTitle = "Reach by Practitioner";
-      compareCats = byPractitioner.map(x => x.label);
-      compareVals = byPractitioner.map(x => x.a.reachTotal);
-    }
-    const compareBox = container.querySelector("#pdCompareChart");
-    renderBarChart(compareBox, {
-      title: compareTitle, categories: compareCats,
-      series: [{ label: "Students reached", color: p.color, values: compareVals }]
-    });
+      container.querySelector("#pdRiskChart").innerHTML = "";
+      riskChartFromAgg(container.querySelector("#pdRiskChart"), agg, "At-Risk Breakdown");
 
-    renderMeter(container.querySelector("#pdSatMeter"), {
-      label: "% Satisfied (4-5 stars)", sub: `${agg.satisfaction.total} survey responses`,
-      value: agg.satisfaction.pct != null ? agg.satisfaction.pct : 0
-    });
+      let compareTitle, compareCats, compareVals;
+      if (groupByFaculty) {
+        const allFaculties = [...new Set(Object.values(p.practitioners).flat())];
+        const byFac = allFaculties.map(fac => ({ label: FACULTY_LABELS[fac] || fac, a: computeAggregate(filterSubs(subs, { faculty: fac })) }));
+        compareTitle = "Reach by Faculty";
+        compareCats = byFac.map(x => x.label);
+        compareVals = byFac.map(x => x.a.reachTotal);
+      } else {
+        const byPractitioner = Object.keys(p.practitioners).map(name => ({ label: name, a: computeAggregate(filterSubs(subs, { practitioner: name })) }));
+        compareTitle = "Reach by Practitioner";
+        compareCats = byPractitioner.map(x => x.label);
+        compareVals = byPractitioner.map(x => x.a.reachTotal);
+      }
+      renderBarChart(container.querySelector("#pdCompareChart"), {
+        title: compareTitle, categories: compareCats,
+        series: [{ label: "Students reached", color: p.color, values: compareVals }]
+      });
+    }
+
+    if (isCoreCurriculum) {
+      const avgFacSat = avg(subs.map(s => Number(s.form.facilitatorSatisfaction)));
+      renderMeter(container.querySelector("#pdSatMeter"), {
+        label: "Facilitator Satisfaction", sub: `${subs.length} facilitator rating(s)`,
+        value: avgFacSat != null ? avgFacSat / 5 * 100 : 0
+      });
+    } else {
+      renderMeter(container.querySelector("#pdSatMeter"), {
+        label: "% Satisfied (4-5 stars)", sub: `${agg.satisfaction.total} survey responses`,
+        value: agg.satisfaction.pct != null ? agg.satisfaction.pct : 0
+      });
+    }
     renderMeter(container.querySelector("#pdComplianceMeter"), {
       label: "Reporting Compliance", sub: `${agg.compliance.complete} of ${agg.compliance.total} submissions fully complete`,
       value: agg.compliance.pct != null ? agg.compliance.pct : 0
@@ -399,14 +437,22 @@ function renderProgrammesView(container) {
 
     const tbl = container.querySelector("#pdTable");
     if (!subs.length) { tbl.innerHTML = `<div class="empty-state">No submissions for this programme/period yet.</div>`; return; }
-    tbl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Practitioner</th><th>Faculty</th><th>Reach</th><th>At-Risk</th><th>Satisfaction</th><th>Compliance</th><th></th></tr></thead><tbody>
-      ${subs.map(s => {
-        const a = computeAggregate([s]);
-        return `<tr><td>${esc(s.practitioner)}</td><td>${esc(s.faculty)}${s.category ? " · " + esc(s.category) : ""}</td>
-          <td>${fmtNum(a.reachTotal)}</td><td>${fmtNum(a.riskTotal)}</td><td>${a.satisfaction.avg != null ? fmt1(a.satisfaction.avg) + "/5" : "—"}</td>
+    if (isCoreCurriculum) {
+      tbl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Practitioner</th><th>Module</th><th>Pass Rate</th><th>Attendance</th><th>At-Risk in Module</th><th>Compliance</th><th></th></tr></thead><tbody>
+        ${subs.map(s => `<tr><td>${esc(s.practitioner)}</td><td>${esc(s.form.module)}</td>
+          <td>${fmtPct(s.form.passRate)}</td><td>${fmtPct(s.form.attendance)}</td><td>${fmtNum(s.form.atRiskInModule)}</td>
           <td>${statusBadge(isSubmissionComplete(s) ? "good" : "warning", isSubmissionComplete(s) ? "Complete" : followUpPriority(s))}</td>
-          <td><button class="btn ghost" data-del="${s.id}">Delete</button></td></tr>`;
-      }).join("")}</tbody></table></div>`;
+          <td><button class="btn ghost" data-del="${s.id}">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+    } else {
+      tbl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Practitioner</th><th>Faculty</th><th>Reach</th><th>At-Risk</th><th>Satisfaction</th><th>Compliance</th><th></th></tr></thead><tbody>
+        ${subs.map(s => {
+          const a = computeAggregate([s]);
+          return `<tr><td>${esc(s.practitioner)}</td><td>${esc(s.faculty)}${s.category ? " · " + esc(s.category) : ""}</td>
+            <td>${fmtNum(a.reachTotal)}</td><td>${fmtNum(a.riskTotal)}</td><td>${a.satisfaction.avg != null ? fmt1(a.satisfaction.avg) + "/5" : "—"}</td>
+            <td>${statusBadge(isSubmissionComplete(s) ? "good" : "warning", isSubmissionComplete(s) ? "Complete" : followUpPriority(s))}</td>
+            <td><button class="btn ghost" data-del="${s.id}">Delete</button></td></tr>`;
+        }).join("")}</tbody></table></div>`;
+    }
     tbl.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => {
       saveStore(STORE_KEYS.term, allTermSubmissions().filter(x => x.id !== btn.getAttribute("data-del")));
       draw();
