@@ -266,71 +266,128 @@ function renderSubmitView(container) {
 /* ==========================================================================
    PROGRAMME DASHBOARDS
    ========================================================================== */
+function topTopicsFromSubs(subs, limit) {
+  const counts = {};
+  subs.forEach(s => {
+    const raw = s.form.mainTopics || "";
+    raw.split("\n").map(t => t.trim()).filter(Boolean).forEach(t => {
+      const key = t.toLowerCase();
+      counts[key] = counts[key] || { label: t, count: 0 };
+      counts[key].count++;
+    });
+  });
+  return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, limit || 8);
+}
+
 function renderProgrammesView(container) {
   const state = { programme: REPORTING_PROGRAMMES[0], year: ACADEMIC_YEARS[1], term: "Term 2" };
-  container.innerHTML = `
-    <div class="card">
-      <div class="two-col-header">
-        <div><h2 id="pdTitle"></h2><p class="help-note">Auto-computed from that programme's Term submissions.</p></div>
-        <div class="grid cols-2" style="min-width:280px;">${yearTermPicker("pd", state.year, state.term)}</div>
-      </div>
-      <div class="pill-select" id="pdPills" style="margin-top:6px;"></div>
-    </div>
-    <div class="grid cols-4" id="pdTiles"></div>
-    <div class="grid cols-2">
-      <div id="pdRiskChart"></div>
-      <div id="pdCompareChart"></div>
-    </div>
-    <div class="grid cols-2">
-      <div id="pdSatMeter"></div>
-      <div id="pdComplianceMeter"></div>
-    </div>
-    <div class="grid cols-2">
-      <div class="card"><h3 class="section-title" style="margin-top:0;">Highlights</h3><div id="pdHighlights"></div></div>
-      <div class="card"><h3 class="section-title" style="margin-top:0;">Challenges</h3><div id="pdChallenges"></div></div>
-    </div>
-    <div class="card"><h2>Submissions this period</h2><div id="pdTable"></div></div>`;
-
-  const pillsBox = container.querySelector("#pdPills");
-  pillsBox.innerHTML = REPORTING_PROGRAMMES.map(k => `<button data-k="${k}" class="${k === state.programme ? "active" : ""}">${esc(PROGRAMMES[k].name)}</button>`).join("");
-  pillsBox.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    state.programme = b.getAttribute("data-k");
-    pillsBox.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
-    draw();
-  }));
-  container.querySelector("#pdYear").onchange = e => { state.year = e.target.value; draw(); };
-  container.querySelector("#pdTerm").onchange = e => { state.term = e.target.value; draw(); };
 
   function draw() {
     const p = PROGRAMMES[state.programme];
-    container.querySelector("#pdTitle").textContent = p.name + " — Programme Report";
     const subs = filterSubs(allTermSubmissions(), { programme: state.programme, year: state.year, term: state.term });
     const agg = computeAggregate(subs);
+    /* Advising & Writing surface "common topics covered"; Tutorship/SI/PAC/Additional Support
+       surface budget & staffing (they share the same budget block) and compare by faculty
+       rather than by practitioner, since one practitioner often covers several faculties. */
+    const showTopics = p.kind === "advising" || p.kind === "writing";
+    const showBudget = p.kind === "staffed" || p.kind === "additionalSupport";
+    const groupByFaculty = showBudget;
+
+    container.innerHTML = `
+      <div class="card">
+        <div class="two-col-header">
+          <div><h2>${esc(p.name)} — Programme Report</h2><p class="help-note">Auto-computed from this programme's Term submissions.</p></div>
+          <div class="grid cols-2" style="min-width:280px;">${yearTermPicker("pd", state.year, state.term)}</div>
+        </div>
+        <div class="pill-select" id="pdPills" style="margin-top:6px;">
+          ${REPORTING_PROGRAMMES.map(k => `<button data-k="${k}" class="${k === state.programme ? "active" : ""}">${esc(PROGRAMMES[k].name)}</button>`).join("")}
+        </div>
+      </div>
+      <div class="grid cols-4" id="pdTiles"></div>
+      ${showBudget ? `<div class="card"><h3 class="section-title" style="margin-top:0;">Budget & Staffing</h3><div class="grid cols-4" id="pdBudgetTiles"></div></div>` : ""}
+      ${showTopics ? `<div id="pdTopicsChart"></div>` : ""}
+      <div class="grid cols-2">
+        <div id="pdRiskChart"></div>
+        <div id="pdCompareChart"></div>
+      </div>
+      <div class="grid cols-2">
+        <div id="pdSatMeter"></div>
+        <div id="pdComplianceMeter"></div>
+      </div>
+      <div class="grid cols-2">
+        <div class="card"><h3 class="section-title" style="margin-top:0;">Highlights</h3><div id="pdHighlights"></div></div>
+        <div class="card"><h3 class="section-title" style="margin-top:0;">Challenges</h3><div id="pdChallenges"></div></div>
+      </div>
+      <div class="card"><h2>Submissions this period</h2><div id="pdTable"></div></div>`;
+
+    container.querySelector("#pdPills").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      state.programme = b.getAttribute("data-k");
+      draw();
+    }));
+    container.querySelector("#pdYear").onchange = e => { state.year = e.target.value; draw(); };
+    container.querySelector("#pdTerm").onchange = e => { state.term = e.target.value; draw(); };
+
     const tiles = container.querySelector("#pdTiles");
-    tiles.innerHTML = "";
     tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Submissions", value: agg.count }));
     tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Students reached", value: fmtNum(agg.reachTotal) }));
     tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "At-risk assisted", value: fmtNum(agg.riskAssisted) + " / " + fmtNum(agg.riskTotal) }));
-    if (agg.budget.approvedCost || agg.budget.actualCost) {
-      const over = agg.budget.variance > 0;
-      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Budget variance", value: "R" + fmtNum(Math.round(agg.budget.variance)), status: over ? "critical" : "good" }));
-    } else {
-      tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Reporting compliance", value: agg.compliance.pct != null ? fmtPct(agg.compliance.pct) : "—", status: (agg.compliance.pct || 0) >= 80 ? "good" : "warning" }));
+    tiles.insertAdjacentHTML("beforeend", renderStatTile({ label: "Reporting compliance", value: agg.compliance.pct != null ? fmtPct(agg.compliance.pct) : "—", status: (agg.compliance.pct || 0) >= 80 ? "good" : "warning" }));
+
+    if (showBudget) {
+      const bt = container.querySelector("#pdBudgetTiles");
+      const activeModules = sum(subs.map(s => s.form.budget_activeModules));
+      const activeStaff = sum(subs.map(s => s.form.budget_activeStaff));
+      const workedHours = sum(subs.map(s => s.form.budget_workedHours));
+      const over = agg.budget.variance > 0.5, under = agg.budget.variance < -0.5;
+      if (p.hasModules) bt.insertAdjacentHTML("beforeend", renderStatTile({ label: "Modules active", value: fmtNum(activeModules) }));
+      bt.insertAdjacentHTML("beforeend", renderStatTile({ label: `${p.staffLabel} active`, value: fmtNum(activeStaff) }));
+      bt.insertAdjacentHTML("beforeend", renderStatTile({ label: "Hours worked/used", value: fmtNum(workedHours) }));
+      bt.insertAdjacentHTML("beforeend", renderStatTile({
+        label: "Budget variance", value: "R" + fmtNum(Math.round(agg.budget.variance)),
+        status: over ? "critical" : (under ? "warning" : "good")
+      }));
     }
+
+    if (showTopics) {
+      const topics = topTopicsFromSubs(subs, 8);
+      const box = container.querySelector("#pdTopicsChart");
+      if (topics.length) {
+        renderBarChart(box, {
+          title: "Common Topics Covered", sub: `${state.term} ${state.year} — by number of submissions mentioning each topic`,
+          categories: topics.map(t => t.label),
+          series: [{ label: "Mentions", color: p.color, values: topics.map(t => t.count) }]
+        });
+      } else {
+        box.innerHTML = `<div class="chart-card"><div class="chart-title">Common Topics Covered</div><div class="empty-state">No topics captured for this period yet.</div></div>`;
+      }
+    }
+
     container.querySelector("#pdRiskChart").innerHTML = "";
     riskChartFromAgg(container.querySelector("#pdRiskChart"), agg, "At-Risk Breakdown");
-    const byPractitioner = Object.keys(p.practitioners).map(name => ({ name, a: computeAggregate(filterSubs(subs, { practitioner: name })) }));
-    container.querySelector("#pdCompareChart").innerHTML = "";
-    renderBarChart(container.querySelector("#pdCompareChart"), {
-      title: "Reach by Practitioner", categories: byPractitioner.map(x => x.name),
-      series: [{ label: "Students reached", color: p.color, values: byPractitioner.map(x => x.a.reachTotal) }]
+
+    let compareTitle, compareCats, compareVals;
+    if (groupByFaculty) {
+      const allFaculties = [...new Set(Object.values(p.practitioners).flat())];
+      const byFac = allFaculties.map(fac => ({ label: FACULTY_LABELS[fac] || fac, a: computeAggregate(filterSubs(subs, { faculty: fac })) }));
+      compareTitle = "Reach by Faculty";
+      compareCats = byFac.map(x => x.label);
+      compareVals = byFac.map(x => x.a.reachTotal);
+    } else {
+      const byPractitioner = Object.keys(p.practitioners).map(name => ({ label: name, a: computeAggregate(filterSubs(subs, { practitioner: name })) }));
+      compareTitle = "Reach by Practitioner";
+      compareCats = byPractitioner.map(x => x.label);
+      compareVals = byPractitioner.map(x => x.a.reachTotal);
+    }
+    const compareBox = container.querySelector("#pdCompareChart");
+    renderBarChart(compareBox, {
+      title: compareTitle, categories: compareCats,
+      series: [{ label: "Students reached", color: p.color, values: compareVals }]
     });
-    container.querySelector("#pdSatMeter").innerHTML = "";
+
     renderMeter(container.querySelector("#pdSatMeter"), {
       label: "% Satisfied (4-5 stars)", sub: `${agg.satisfaction.total} survey responses`,
       value: agg.satisfaction.pct != null ? agg.satisfaction.pct : 0
     });
-    container.querySelector("#pdComplianceMeter").innerHTML = "";
     renderMeter(container.querySelector("#pdComplianceMeter"), {
       label: "Reporting Compliance", sub: `${agg.compliance.complete} of ${agg.compliance.total} submissions fully complete`,
       value: agg.compliance.pct != null ? agg.compliance.pct : 0
