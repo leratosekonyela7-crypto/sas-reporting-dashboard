@@ -182,7 +182,10 @@ function renderSubmitView(container) {
         <div class="grid cols-4" style="margin-top:10px;">
           ${fSelect("year", "Academic Year", ACADEMIC_YEARS, ACADEMIC_YEARS[1])}
           ${fSelect("term", "Term", TERMS, "Term 2")}
+          ${fDate("periodStart", "Reporting Period — Start", "")}
+          ${fDate("periodEnd", "Reporting Period — End", "")}
         </div>
+        <p class="help-note">Reporting Period is the actual date range this report covers, e.g. 12 March – 20 August 2026 — it doesn't have to match the Term exactly.</p>
         <div id="dynamicFields"></div>
         <div class="btn-row">
           <button type="submit" class="btn">Save Submission</button>
@@ -222,11 +225,12 @@ function renderSubmitView(container) {
     const box = container.querySelector("#recentSubs");
     if (!subs.length) { box.innerHTML = `<div class="empty-state">No submissions yet. Try "Load Sample Data" in the Data Manager tab to see the dashboard in action.</div>`; return; }
     box.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr>
-      <th>Programme</th><th>Practitioner</th><th>Faculty</th><th>Period</th><th>Reach</th><th>At-Risk</th><th>Satisfaction</th><th></th>
+      <th>Programme</th><th>Practitioner</th><th>Faculty</th><th>Term</th><th>Reporting Period</th><th>Reach</th><th>At-Risk</th><th>Satisfaction</th><th></th>
       </tr></thead><tbody>${subs.map(s => {
         const agg = computeAggregate([s]);
         return `<tr><td>${esc(PROGRAMMES[s.programme] ? PROGRAMMES[s.programme].name : s.programme)}</td><td>${esc(s.practitioner)}</td>
           <td>${esc(s.faculty)}${s.category ? " · " + esc(s.category) : ""}</td><td>${esc(s.term)} ${esc(s.year)}</td>
+          <td>${fmtDateRange(s.form.periodStart, s.form.periodEnd)}</td>
           <td>${fmtNum(agg.reachTotal)}</td><td>${fmtNum(agg.riskTotal)}</td><td>${agg.satisfaction.avg != null ? fmt1(agg.satisfaction.avg) + "/5" : "—"}</td>
           <td><button class="btn ghost" data-del="${s.id}">Delete</button></td></tr>`;
       }).join("")}</tbody></table></div>`;
@@ -438,16 +442,17 @@ function renderProgrammesView(container) {
     const tbl = container.querySelector("#pdTable");
     if (!subs.length) { tbl.innerHTML = `<div class="empty-state">No submissions for this programme/period yet.</div>`; return; }
     if (isCoreCurriculum) {
-      tbl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Practitioner</th><th>Module</th><th>Pass Rate</th><th>Attendance</th><th>At-Risk in Module</th><th>Compliance</th><th></th></tr></thead><tbody>
-        ${subs.map(s => `<tr><td>${esc(s.practitioner)}</td><td>${esc(s.form.module)}</td>
+      tbl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Practitioner</th><th>Module</th><th>Reporting Period</th><th>Pass Rate</th><th>Attendance</th><th>At-Risk in Module</th><th>Compliance</th><th></th></tr></thead><tbody>
+        ${subs.map(s => `<tr><td>${esc(s.practitioner)}</td><td>${esc(s.form.module)}</td><td>${fmtDateRange(s.form.periodStart, s.form.periodEnd)}</td>
           <td>${fmtPct(s.form.passRate)}</td><td>${fmtPct(s.form.attendance)}</td><td>${fmtNum(s.form.atRiskInModule)}</td>
           <td>${statusBadge(isSubmissionComplete(s) ? "good" : "warning", isSubmissionComplete(s) ? "Complete" : followUpPriority(s))}</td>
           <td><button class="btn ghost" data-del="${s.id}">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
     } else {
-      tbl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Practitioner</th><th>Faculty</th><th>Reach</th><th>At-Risk</th><th>Satisfaction</th><th>Compliance</th><th></th></tr></thead><tbody>
+      tbl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Practitioner</th><th>Faculty</th><th>Reporting Period</th><th>Reach</th><th>At-Risk</th><th>Satisfaction</th><th>Compliance</th><th></th></tr></thead><tbody>
         ${subs.map(s => {
           const a = computeAggregate([s]);
           return `<tr><td>${esc(s.practitioner)}</td><td>${esc(s.faculty)}${s.category ? " · " + esc(s.category) : ""}</td>
+            <td>${fmtDateRange(s.form.periodStart, s.form.periodEnd)}</td>
             <td>${fmtNum(a.reachTotal)}</td><td>${fmtNum(a.riskTotal)}</td><td>${a.satisfaction.avg != null ? fmt1(a.satisfaction.avg) + "/5" : "—"}</td>
             <td>${statusBadge(isSubmissionComplete(s) ? "good" : "warning", isSubmissionComplete(s) ? "Complete" : followUpPriority(s))}</td>
             <td><button class="btn ghost" data-del="${s.id}">Delete</button></td></tr>`;
@@ -814,8 +819,8 @@ function renderDataView(container) {
   function drawTables() {
     const subs = allTermSubmissions();
     const t1 = container.querySelector("#dmTermTable");
-    t1.innerHTML = subs.length ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Programme</th><th>Practitioner</th><th>Faculty</th><th>Period</th><th>Saved</th></tr></thead><tbody>
-      ${subs.slice().reverse().map(s => `<tr><td>${esc(PROGRAMMES[s.programme] ? PROGRAMMES[s.programme].name : s.programme)}</td><td>${esc(s.practitioner)}</td><td>${esc(s.faculty)}</td><td>${esc(s.term)} ${esc(s.year)}</td><td>${new Date(s.createdAt).toLocaleString()}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state">No data yet.</div>`;
+    t1.innerHTML = subs.length ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Programme</th><th>Practitioner</th><th>Faculty</th><th>Term</th><th>Reporting Period</th><th>Saved</th></tr></thead><tbody>
+      ${subs.slice().reverse().map(s => `<tr><td>${esc(PROGRAMMES[s.programme] ? PROGRAMMES[s.programme].name : s.programme)}</td><td>${esc(s.practitioner)}</td><td>${esc(s.faculty)}</td><td>${esc(s.term)} ${esc(s.year)}</td><td>${fmtDateRange(s.form.periodStart, s.form.periodEnd)}</td><td>${new Date(s.createdAt).toLocaleString()}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state">No data yet.</div>`;
     const recs = allSemesterRecords();
     const t2 = container.querySelector("#dmSemTable");
     t2.innerHTML = recs.length ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Programme</th><th>Practitioner</th><th>Faculty</th><th>Semester</th></tr></thead><tbody>

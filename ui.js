@@ -46,6 +46,23 @@ function fText(name, label, value) {
   return `<label class="field"><span class="lbl">${esc(label)}</span>
     <input type="text" name="${esc(name)}" value="${esc(value || "")}"></label>`;
 }
+function fDate(name, label, value) {
+  return `<label class="field"><span class="lbl">${esc(label)}</span>
+    <input type="date" name="${esc(name)}" value="${esc(value || "")}"></label>`;
+}
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+function fmtDateRange(start, end) {
+  const s = fmtDate(start), e = fmtDate(end);
+  if (s && e) return `${s} – ${e}`;
+  if (s) return `From ${s}`;
+  if (e) return `Until ${e}`;
+  return "—";
+}
 function fTextarea(name, label, value) {
   return `<label class="field wide"><span class="lbl">${esc(label)}</span>
     <textarea name="${esc(name)}">${esc(value || "")}</textarea></label>`;

@@ -51,7 +51,8 @@ function initTheme() {
 }
 
 function mkSub(programme, practitioner, faculty, year, term, form, category) {
-  return { id: uid(), createdAt: new Date().toISOString(), programme, practitioner, faculty, category: category || null, year, term, form };
+  const withPeriod = Object.assign({ periodStart: "2026-04-14", periodEnd: "2026-06-19" }, form);
+  return { id: uid(), createdAt: new Date().toISOString(), programme, practitioner, faculty, category: category || null, year, term, form: withPeriod };
 }
 
 function loadSampleData() {
