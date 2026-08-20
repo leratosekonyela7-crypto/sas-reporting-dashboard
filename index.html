@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAS Reporting Dashboard</title>
+<style>
+:root{
+  color-scheme: light;
+  --page:            #f9f9f7;
+  --surface-1:       #fcfcfb;
+  --surface-2:       #ffffff;
+  --text-primary:    #0b0b0b;
+  --text-secondary:  #52514e;
+  --text-muted:      #898781;
+  --gridline:        #e1e0d9;
+  --baseline:        #c3c2b7;
+  --border:          rgba(11,11,11,0.10);
+  --success-text:    #006300;
+
+  --cat-blue:    #2a78d6;
+  --cat-orange:  #eb6834;
+  --cat-aqua:    #1baf7a;
+  --cat-yellow:  #eda100;
+  --cat-magenta: #e87ba4;
+  --cat-green:   #008300;
+  --cat-violet:  #4a3aa7;
+  --cat-red:     #e34948;
+
+  --status-good:     #0ca30c;
+  --status-warning:  #fab219;
+  --status-serious:  #ec835a;
+  --status-critical: #d03b3b;
+
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(11,11,11,0.06), 0 4px 14px rgba(11,11,11,0.05);
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --page:            #0d0d0d;
+  --surface-1:       #1a1a19;
+  --surface-2:       #212120;
+  --text-primary:    #ffffff;
+  --text-secondary:  #c3c2b7;
+  --text-muted:      #898781;
+  --gridline:        #2c2c2a;
+  --baseline:        #383835;
+  --border:          rgba(255,255,255,0.10);
+  --success-text:    #0ca30c;
+
+  --cat-blue:    #3987e5;
+  --cat-orange:  #d95926;
+  --cat-aqua:    #199e70;
+  --cat-yellow:  #c98500;
+  --cat-magenta: #d55181;
+  --cat-green:   #008300;
+  --cat-violet:  #9085e9;
+  --cat-red:     #e66767;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--page);
+  color:var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size:14px;
+  line-height:1.5;
+}
+a{color:var(--cat-blue);}
+h1,h2,h3,h4{margin:0 0 8px 0; font-weight:700;}
+.app-header{
+  background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+  padding:14px 24px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  position:sticky; top:0; z-index:20;
+}
+.app-header .brand{display:flex; align-items:center; gap:10px;}
+.app-header .brand .logo{
+  width:34px;height:34px;border-radius:8px;background:var(--cat-blue);
+  color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px;
+}
+.app-header .brand h1{font-size:16px; margin:0;}
+.app-header .brand small{color:var(--text-secondary); display:block; font-size:11px;}
+.theme-toggle{
+  border:1px solid var(--border); background:var(--surface-1); color:var(--text-primary);
+  border-radius:8px; padding:6px 10px; cursor:pointer; font-size:12px;
+}
+nav.tabs{
+  display:flex; gap:4px; background:var(--surface-2); border-bottom:1px solid var(--border);
+  padding:0 24px; overflow-x:auto; position:sticky; top:63px; z-index:19;
+}
+nav.tabs button{
+  border:none; background:transparent; color:var(--text-secondary); font-size:13px; font-weight:600;
+  padding:12px 14px; cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;
+}
+nav.tabs button.active{color:var(--cat-blue); border-bottom-color:var(--cat-blue);}
+nav.tabs button:hover{color:var(--text-primary);}
+main{padding:22px 24px 60px; max-width:1320px; margin:0 auto;}
+.view{display:none;}
+.view.active{display:block;}
+.card{
+  background:var(--surface-1); border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px 20px; box-shadow:var(--shadow); margin-bottom:18px;
+}
+.card h2{font-size:16px;}
+.card h3.section-title{
+  font-size:12px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted);
+  margin:22px 0 10px 0; padding-top:14px; border-top:1px solid var(--gridline);
+}
+.card h3.section-title:first-of-type{margin-top:0; padding-top:0; border-top:none;}
+.grid{display:grid; gap:14px;}
+.grid.cols-2{grid-template-columns:repeat(2,1fr);}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+.grid.cols-4{grid-template-columns:repeat(4,1fr);}
+.grid.cols-6{grid-template-columns:repeat(6,1fr);}
+@media (max-width:900px){.grid.cols-2,.grid.cols-3,.grid.cols-4,.grid.cols-6{grid-template-columns:repeat(2,1fr);}}
+
+.field{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--text-secondary);}
+.field span.lbl{font-weight:600; color:var(--text-primary);}
+.field input, .field select, .field textarea{
+  font-family:inherit; font-size:13px; padding:8px 10px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface-2); color:var(--text-primary);
+}
+.field textarea{min-height:60px; resize:vertical;}
+.field input:focus, .field select:focus, .field textarea:focus{outline:2px solid var(--cat-blue); outline-offset:1px;}
+.field.wide{grid-column: 1 / -1;}
+.checkbox-row{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-secondary); padding:4px 0;}
+.checkbox-group{display:flex; flex-wrap:wrap; gap:10px 16px;}
+fieldset{border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin:0;}
+legend{font-size:12px; font-weight:700; color:var(--text-primary); padding:0 4px;}
+
+button.btn{
+  border:none; border-radius:8px; padding:9px 16px; font-size:13px; font-weight:600; cursor:pointer;
+  background:var(--cat-blue); color:#fff;
+}
+button.btn.secondary{background:var(--surface-2); color:var(--text-primary); border:1px solid var(--border);}
+button.btn.ghost{background:transparent; color:var(--cat-blue); padding:9px 4px;}
+button.btn.danger{background:var(--status-critical); color:#fff;}
+button.btn:hover{filter:brightness(0.95);}
+.btn-row{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:16px;}
+
+.stat-tile{
+  background:var(--surface-1); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px 16px; display:flex; flex-direction:column; gap:4px;
+}
+.stat-tile .stat-label{font-size:11.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em;}
+.stat-tile .stat-value{font-size:26px; font-weight:800; color:var(--text-primary);}
+.stat-tile .stat-delta{font-size:12px; font-weight:600;}
+.stat-tile .stat-delta.up{color:var(--success-text);}
+.stat-tile .stat-delta.down{color:var(--status-critical);}
+.stat-tile.status-good{border-left:4px solid var(--status-good);}
+.stat-tile.status-warning{border-left:4px solid var(--status-warning);}
+.stat-tile.status-serious{border-left:4px solid var(--status-serious);}
+.stat-tile.status-critical{border-left:4px solid var(--status-critical);}
+
+.badge{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px;}
+.badge.good{background:color-mix(in srgb, var(--status-good) 16%, transparent); color:var(--status-good);}
+.badge.warning{background:color-mix(in srgb, var(--status-warning) 20%, transparent); color:#8a5a00;}
+.badge.serious{background:color-mix(in srgb, var(--status-serious) 20%, transparent); color:#9c3f19;}
+.badge.critical{background:color-mix(in srgb, var(--status-critical) 16%, transparent); color:var(--status-critical);}
+.badge.neutral{background:var(--gridline); color:var(--text-secondary);}
+
+table.data-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+table.data-table th, table.data-table td{padding:8px 10px; border-bottom:1px solid var(--gridline); text-align:left;}
+table.data-table th{color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:.03em; font-weight:700;}
+table.data-table tbody tr:hover{background:var(--surface-2);}
+.table-scroll{overflow-x:auto;}
+
+.chart-card{background:var(--surface-1); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow);}
+.chart-card .chart-title{font-size:13px; font-weight:700; margin-bottom:2px;}
+.chart-card .chart-sub{font-size:11.5px; color:var(--text-muted); margin-bottom:10px;}
+.chart-legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--text-secondary); margin-top:10px;}
+.chart-legend .swatch{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle;}
+.chart-tooltip{
+  position:absolute; background:var(--text-primary); color:var(--page); font-size:11.5px;
+  padding:6px 9px; border-radius:6px; pointer-events:none; opacity:0; transition:opacity .1s; z-index:50; white-space:nowrap;
+}
+.table-toggle{font-size:11px; color:var(--cat-blue); cursor:pointer; background:none; border:none; padding:0; margin-top:8px; text-decoration:underline;}
+.empty-state{color:var(--text-muted); font-size:12.5px; padding:18px; text-align:center; border:1px dashed var(--gridline); border-radius:8px;}
+
+.pill-select{display:flex; gap:6px; flex-wrap:wrap;}
+.pill-select button{
+  border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary);
+  border-radius:99px; padding:6px 13px; font-size:12px; font-weight:600; cursor:pointer;
+}
+.pill-select button.active{background:var(--cat-blue); color:#fff; border-color:var(--cat-blue);}
+
+.toast{
+  position:fixed; bottom:22px; right:22px; background:var(--text-primary); color:var(--page);
+  padding:11px 18px; border-radius:8px; font-size:13px; box-shadow:var(--shadow); opacity:0; transform:translateY(8px);
+  transition:all .25s; z-index:100;
+}
+.toast.show{opacity:1; transform:translateY(0);}
+.help-note{font-size:11.5px; color:var(--text-muted); margin-top:2px;}
+.two-col-header{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;}
+.muted-block{background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-size:12.5px; color:var(--text-secondary);}
+.computed-box{background:var(--surface-2); border:1px dashed var(--baseline); border-radius:8px; padding:10px 12px; font-size:12.5px; margin-top:6px;}
+.computed-box b{color:var(--text-primary);}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo">SAS</div>
+    <div>
+      <h1>Student Academic Support &mdash; Reporting Dashboard</h1>
+      <small>Practitioner report &rarr; Programme report &rarr; Senate STLC report, in one place</small>
+    </div>
+  </div>
+  <button class="theme-toggle" id="themeToggle">🌙 Dark mode</button>
+</header>
+
+<nav class="tabs" id="mainTabs">
+  <button data-view="overview" class="active">Overview</button>
+  <button data-view="submit">Submit a Term Report</button>
+  <button data-view="programmes">Programme Dashboards</button>
+  <button data-view="semester">Semester Roll-up</button>
+  <button data-view="analytics">Learning Analytics</button>
+  <button data-view="senate">Senate STLC Report</button>
+  <button data-view="data">Data Manager</button>
+  <button data-view="help">How to use</button>
+</nav>
+
+<main>
+  <section class="view active" id="view-overview"></section>
+  <section class="view" id="view-submit"></section>
+  <section class="view" id="view-programmes"></section>
+  <section class="view" id="view-semester"></section>
+  <section class="view" id="view-analytics"></section>
+  <section class="view" id="view-senate"></section>
+  <section class="view" id="view-data"></section>
+  <section class="view" id="view-help"></section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="schema.js"></script>
+<script src="ui.js"></script>
+<script src="charts.js"></script>
+<script src="forms.js"></script>
+<script src="views.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
