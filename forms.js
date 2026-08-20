@@ -105,8 +105,8 @@ function block_reflection(mode, data) {
   const full = mode !== "light";
   return `
   <h3 class="section-title">Reflection & Recommendations</h3>
-  <div class="grid cols-2">
-    ${fSelect("ltaTag", "LTA Plan Alignment Tag", LTA_TAGS, data.ltaTag)}
+  ${fCheckboxGroup("ltaTag", "LTA Plan Alignment Tag(s) — select all that apply", LTA_TAGS, data.ltaTag)}
+  <div class="grid cols-2" style="margin-top:10px;">
     ${full ? fSelect("selfRatedScore", "Self-Rated Achievement Score (1-5)", ["1", "2", "3", "4", "5"], data.selfRatedScore) : ""}
   </div>
   <div class="grid cols-2" style="margin-top:10px;">

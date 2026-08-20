@@ -52,7 +52,10 @@ function computeAggregate(subs) {
   const completeCount = subs.filter(isSubmissionComplete).length;
   const ltaTagCounts = {};
   LTA_TAGS.forEach(t => ltaTagCounts[t] = 0);
-  f.forEach(x => { if (x.ltaTag && ltaTagCounts[x.ltaTag] != null) ltaTagCounts[x.ltaTag]++; });
+  f.forEach(x => {
+    const tags = Array.isArray(x.ltaTag) ? x.ltaTag : (x.ltaTag ? [x.ltaTag] : []);
+    tags.forEach(t => { if (ltaTagCounts[t] != null) ltaTagCounts[t]++; });
+  });
   const followUp = { "Priority 1 - Immediate": 0, "Priority 2 - Moderate": 0, "Priority 3 - Monitor": 0, "No Follow-up Needed": 0 };
   subs.forEach(s => { followUp[followUpPriority(s)]++; });
   const recommendations = subs.filter(s => s.form.recommendation && s.form.recommendationPriority === "High")
