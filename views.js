@@ -283,6 +283,87 @@ function topTopicsFromSubs(subs, limit) {
   return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, limit || 8);
 }
 
+/* Builds a self-contained, printable HTML report comparing one practitioner/faculty's
+   own submissions against the whole programme's aggregate for the same period — lets a
+   practitioner (e.g. Letlotlo in NAS) see how their numbers stack up against the overall
+   Academic Advising programme report. */
+function buildComparisonReportHTML(ctx) {
+  const { p, isCoreCurriculum, showBudget, scopeLabel, individualSubs, programmeSubs, state } = ctx;
+  const ind = computeAggregate(individualSubs);
+  const prog = computeAggregate(programmeSubs);
+
+  function row(label, indVal, progVal) {
+    return `<tr><td>${esc(label)}</td><td>${esc(indVal)}</td><td>${esc(progVal)}</td></tr>`;
+  }
+
+  let metricRows = row("Submissions", ind.count, prog.count);
+  if (isCoreCurriculum) {
+    const indPass = avg(individualSubs.map(s => s.form.passRate)), progPass = avg(programmeSubs.map(s => s.form.passRate));
+    const indAtt = avg(individualSubs.map(s => s.form.attendance)), progAtt = avg(programmeSubs.map(s => s.form.attendance));
+    const indFacSat = avg(individualSubs.map(s => Number(s.form.facilitatorSatisfaction))), progFacSat = avg(programmeSubs.map(s => Number(s.form.facilitatorSatisfaction)));
+    metricRows += row("Avg Pass Rate", indPass != null ? fmtPct(indPass) : "—", progPass != null ? fmtPct(progPass) : "—");
+    metricRows += row("Avg Attendance", indAtt != null ? fmtPct(indAtt) : "—", progAtt != null ? fmtPct(progAtt) : "—");
+    metricRows += row("Students At Risk in Modules", fmtNum(sum(individualSubs.map(s => s.form.atRiskInModule))), fmtNum(sum(programmeSubs.map(s => s.form.atRiskInModule))));
+    metricRows += row("Facilitator Satisfaction /5", indFacSat != null ? fmt1(indFacSat) : "—", progFacSat != null ? fmt1(progFacSat) : "—");
+  } else {
+    metricRows += row("Students Reached", fmtNum(ind.reachTotal), fmtNum(prog.reachTotal));
+    metricRows += row("At-Risk Total (Yellow+Orange+Red)", fmtNum(ind.riskTotal), fmtNum(prog.riskTotal));
+    metricRows += row("At-Risk Assisted", fmtNum(ind.riskAssisted), fmtNum(prog.riskAssisted));
+    metricRows += row("Avg Satisfaction /5", ind.satisfaction.avg != null ? fmt1(ind.satisfaction.avg) : "—", prog.satisfaction.avg != null ? fmt1(prog.satisfaction.avg) : "—");
+    metricRows += row("% Satisfied (4-5 stars)", ind.satisfaction.pct != null ? fmtPct(ind.satisfaction.pct) : "—", prog.satisfaction.pct != null ? fmtPct(prog.satisfaction.pct) : "—");
+    metricRows += row("Reporting Compliance", ind.compliance.pct != null ? fmtPct(ind.compliance.pct) : "—", prog.compliance.pct != null ? fmtPct(prog.compliance.pct) : "—");
+    if (showBudget) {
+      if (p.hasModules) metricRows += row("Modules Active", fmtNum(sum(individualSubs.map(s => s.form.budget_activeModules))), fmtNum(sum(programmeSubs.map(s => s.form.budget_activeModules))));
+      metricRows += row(`${p.staffLabel} Active`, fmtNum(sum(individualSubs.map(s => s.form.budget_activeStaff))), fmtNum(sum(programmeSubs.map(s => s.form.budget_activeStaff))));
+      metricRows += row("Hours Worked", fmtNum(sum(individualSubs.map(s => s.form.budget_workedHours))), fmtNum(sum(programmeSubs.map(s => s.form.budget_workedHours))));
+      metricRows += row("Budget Variance (R)", fmtNum(Math.round(ind.budget.variance)), fmtNum(Math.round(prog.budget.variance)));
+    }
+  }
+
+  function listBlock(title, items) {
+    if (!items.length) return `<h4>${esc(title)}</h4><p class="muted">No entries recorded for this period.</p>`;
+    return `<h4>${esc(title)}</h4><ul>${items.slice(0, 6).map(i => `<li><b>${esc(i.practitioner)}:</b> ${esc(i.text)}</li>`).join("")}</ul>`;
+  }
+
+  const periods = individualSubs.map(s => fmtDateRange(s.form.periodStart, s.form.periodEnd)).filter(x => x !== "—");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(p.name)} — ${esc(scopeLabel)} vs Programme</title>
+<style>
+  body{font-family:"Segoe UI",Arial,sans-serif;color:#111;margin:36px;max-width:920px;}
+  h1{font-size:21px;margin:0 0 4px;} h2{font-size:15px;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:5px;margin-top:30px;}
+  h4{font-size:13px;margin:16px 0 4px;}
+  .muted{color:#666;font-size:12px;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px;}
+  th,td{border:1px solid #ccc;padding:7px 11px;text-align:left;}
+  th{background:#f2f2f2;}
+  .meta{font-size:12px;color:#555;margin-bottom:16px;line-height:1.6;}
+  ul{margin:4px 0 4px 18px;font-size:12.5px;}
+  .footer{margin-top:34px;font-size:11px;color:#888;border-top:1px solid #ddd;padding-top:10px;}
+  @media print{ body{margin:14mm;} }
+</style></head>
+<body>
+  <h1>${esc(p.name)} — Individual vs Programme Report</h1>
+  <div class="meta">
+    Scope: <b>${esc(scopeLabel)}</b><br>
+    Term: <b>${esc(state.term)} ${esc(state.year)}</b>${periods.length ? `<br>Reporting period(s) declared: <b>${periods.map(esc).join("; ")}</b>` : ""}<br>
+    Generated: ${new Date().toLocaleString()}
+  </div>
+
+  <h2>Comparison: ${esc(scopeLabel)} vs. ${esc(p.name)} Programme Overall</h2>
+  <table><thead><tr><th>Metric</th><th>${esc(scopeLabel)}</th><th>Programme Overall</th></tr></thead><tbody>${metricRows}</tbody></table>
+
+  <h2>${esc(scopeLabel)} — Details</h2>
+  ${listBlock("Key Outcomes Achieved", ind.highlights)}
+  ${listBlock("Main Challenges Encountered", ind.challenges)}
+
+  <h2>${esc(p.name)} Programme — Overview</h2>
+  ${listBlock("Programme Highlights", prog.highlights)}
+  ${listBlock("Programme Challenges", prog.challenges)}
+
+  <div class="footer">Generated from the SAS Reporting Dashboard (Sol Plaatje University). To keep a PDF copy, open this file in a browser and use Print &rarr; Save as PDF.</div>
+</body></html>`;
+}
+
 function renderProgrammesView(container) {
   const state = { programme: REPORTING_PROGRAMMES[0], year: ACADEMIC_YEARS[1], term: "Term 2" };
 
@@ -300,6 +381,13 @@ function renderProgrammesView(container) {
        (SCOR511/SCOR612) — so it gets its own tiles, module pass-rate/attendance charts and table
        instead of the generic reach/at-risk view, which would otherwise show misleading zeros. */
     const isCoreCurriculum = p.kind === "coreCurriculum";
+    /* The "individual" scope for a downloadable comparison report follows the same
+       dimension as the reach chart: faculty for the budget-tracked programmes, practitioner
+       for everyone else (including Core Curriculum, where Sello/Hendri are the individuals). */
+    const scopeRows = groupByFaculty
+      ? [...new Set(Object.values(p.practitioners).flat())].map(fac => ({ key: fac, label: FACULTY_LABELS[fac] || fac }))
+      : Object.keys(p.practitioners).map(name => ({ key: name, label: name }));
+    const scopeIsFaculty = groupByFaculty;
 
     container.innerHTML = `
       <div class="card">
@@ -309,6 +397,15 @@ function renderProgrammesView(container) {
         </div>
         <div class="pill-select" id="pdPills" style="margin-top:6px;">
           ${REPORTING_PROGRAMMES.map(k => `<button data-k="${k}" class="${k === state.programme ? "active" : ""}">${esc(PROGRAMMES[k].name)}</button>`).join("")}
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title" style="margin-top:0;">Download an Individual vs. Programme Report</h3>
+        <p class="help-note">Pick ${scopeIsFaculty ? "a faculty" : "a practitioner"} to download their own report alongside the overall ${esc(p.name)} programme report for ${esc(state.term)} ${esc(state.year)} — useful for a ${scopeIsFaculty ? "faculty" : "practitioner"}-level comparison.</p>
+        <div class="grid cols-2">
+          <label class="field"><span class="lbl">${scopeIsFaculty ? "Faculty" : "Practitioner"}</span>
+            <select id="pdScopeSelect">${scopeRows.map(r => `<option value="${esc(r.key)}">${esc(r.label)}</option>`).join("")}</select></label>
+          <div style="display:flex; align-items:flex-end;"><button class="btn" id="pdDownloadReportBtn">Download Comparison Report</button></div>
         </div>
       </div>
       <div class="grid cols-4" id="pdTiles"></div>
@@ -399,24 +496,25 @@ function renderProgrammesView(container) {
       container.querySelector("#pdRiskChart").innerHTML = "";
       riskChartFromAgg(container.querySelector("#pdRiskChart"), agg, "At-Risk Breakdown");
 
-      let compareTitle, compareCats, compareVals;
-      if (groupByFaculty) {
-        const allFaculties = [...new Set(Object.values(p.practitioners).flat())];
-        const byFac = allFaculties.map(fac => ({ label: FACULTY_LABELS[fac] || fac, a: computeAggregate(filterSubs(subs, { faculty: fac })) }));
-        compareTitle = "Reach by Faculty";
-        compareCats = byFac.map(x => x.label);
-        compareVals = byFac.map(x => x.a.reachTotal);
-      } else {
-        const byPractitioner = Object.keys(p.practitioners).map(name => ({ label: name, a: computeAggregate(filterSubs(subs, { practitioner: name })) }));
-        compareTitle = "Reach by Practitioner";
-        compareCats = byPractitioner.map(x => x.label);
-        compareVals = byPractitioner.map(x => x.a.reachTotal);
-      }
+      const compareTitle = scopeIsFaculty ? "Reach by Faculty" : "Reach by Practitioner";
+      const compareVals = scopeRows.map(r => computeAggregate(filterSubs(subs, scopeIsFaculty ? { faculty: r.key } : { practitioner: r.key })).reachTotal);
       renderBarChart(container.querySelector("#pdCompareChart"), {
-        title: compareTitle, categories: compareCats,
+        title: compareTitle, categories: scopeRows.map(r => r.label),
         series: [{ label: "Students reached", color: p.color, values: compareVals }]
       });
     }
+
+    const scopeSelect = container.querySelector("#pdScopeSelect");
+    container.querySelector("#pdDownloadReportBtn").addEventListener("click", () => {
+      const scopeKey = scopeSelect.value;
+      const scopeLabel = scopeSelect.options[scopeSelect.selectedIndex].textContent;
+      const individualSubs = filterSubs(subs, scopeIsFaculty ? { faculty: scopeKey } : { practitioner: scopeKey });
+      if (!individualSubs.length) { showToast(`No submissions found for ${scopeLabel} in ${state.term} ${state.year}.`); return; }
+      const html = buildComparisonReportHTML({ p, isCoreCurriculum, showBudget, scopeLabel, individualSubs, programmeSubs: subs, state });
+      const safe = s => String(s).replace(/[^a-z0-9]+/gi, "_");
+      downloadTextFile(`${safe(p.name)}_${safe(scopeLabel)}_vs_Programme_${safe(state.term)}_${state.year}.html`, html, "text/html");
+      showToast("Report downloaded — open it in a browser and use Print > Save as PDF if you need a PDF copy.");
+    });
 
     if (isCoreCurriculum) {
       const avgFacSat = avg(subs.map(s => Number(s.form.facilitatorSatisfaction)));

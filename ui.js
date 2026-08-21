@@ -121,6 +121,16 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
+function downloadTextFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime || "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function downloadJSON(filename, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
