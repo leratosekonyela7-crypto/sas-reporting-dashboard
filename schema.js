@@ -9,7 +9,7 @@ const FACULTY = {
 };
 const FACULTY_LABELS = {
   FoEDU: "Education", FoEMS: "Economic & Management Sciences",
-  FoHUM: "Humanities", FoNAS: "Natural & Agricultural Sciences",
+  FoHUM: "Humanities", FoNAS: "Natural & Applied Sciences",
   "All Faculties": "All Faculties", "N/A": "N/A"
 };
 
